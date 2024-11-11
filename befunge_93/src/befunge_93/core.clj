@@ -1,5 +1,6 @@
 (ns befunge-93.core
-    (:require [clojure.string :as str]))
+    (:require [clojure.string :as str]
+      [clojure.java.io :as io]))
 
 (defn leer-archivo [ruta]
       (try
@@ -29,9 +30,16 @@
                            nueva-matriz (assoc matriz fila nueva-fila)]  ; Actualizamos la matriz con la fila modificada
                           (recur nueva-matriz (rest chars) fila (inc columna))))))))
 
+(defn buscar-archivo [nombre]
+      (letfn [(buscar [dir]
+                      (let [archivos (file-seq (io/file dir))]
+                           (some #(when (.equalsIgnoreCase (.getName %) nombre) (.getPath %)) archivos)))]
+             (or (buscar "/")
+                 (println "Archivo no encontrado"))))
+
 (defn -main []
       (println "Contenido cargado:")
-      (let [contenido (leer-archivo "C:\\Users\\pochi\\Desktop\\ejemplo.txt")
+      (let [contenido (leer-archivo (buscar-archivo "ejemplo.txt"))
             matriz (crear-matriz-vacia)
             matriz-llena (llenar-matriz matriz contenido)]
            (println "Matriz llena:")
