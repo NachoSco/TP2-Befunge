@@ -104,11 +104,15 @@
             valor2 (desapilar pila)]
            (apilar pila (mod valor2 valor1))))
 
-(defn not [pila]
+(defn negar [pila]
       (let [valor (obtener-ultimo pila)
             nueva-pila (desapilar pila)]
            (apilar nueva-pila (if (not= valor 0) 0 1))))
 
+(defn mayor-que [pila]
+      (let [valor1 (desapilar pila)
+            valor2 (desapilar pila)]
+           (apilar pila (if (> valor2 valor1) 1 0))))  ;; Devuelve 1 si valor2 > valor1, sino 0
 
 ;----------------Instrucciones de movimiento-------------------------
 
@@ -129,6 +133,18 @@
       (let [direcciones [:derecha :izquierda :arriba :abajo]
             direccion-aleatoria (rand-nth direcciones)]  ;; Selecciona una dirección aleatoria
            (cambiar-direccion puntero direccion-aleatoria)))
+
+(defn horizontal-if [pila puntero]
+      (let [valor (desapilar pila)]
+           (if (zero? valor)
+             (cambiar-direccion puntero :derecha) ;; Si es 0, mueve a la derecha
+             (cambiar-direccion puntero :izquierda)))) ;; Si no, mueve a la izquierda
+
+(defn vertical-if [pila puntero]
+      (let [valor (desapilar pila)]
+           (if (zero? valor)
+             (cambiar-direccion puntero :abajo) ;; Si es 0, mueve hacia abajo
+             (cambiar-direccion puntero :arriba)))) ;; Si no, mueve hacia arriba
 
 ;-------------Instrucciones que operan sobre los valores de la pila--------------------
 
@@ -159,26 +175,28 @@
 (defn ejecutar-operacion [operacion pila puntero]
       (case operacion
             ;Atirmetica
-            + (sumar pila)
-            - (restar pila)
-            * (multiplicar pila)
-            / (dividir pila)
-            % (modulo pila)
-            ! (not pila)
-            ` (mayor-que pila)
+            \+ (sumar pila)
+            \- (restar pila)
+            \* (multiplicar pila)
+            \/ (dividir pila)
+            \% (modulo pila)
+            \! (negar pila)
+            \` (mayor-que pila)
             ;Ins de la Pila
             \: (duplicar pila)
             \ (intercambiar pila)
-            $ (desapilar pila)
-            . (imprimir-int pila)
-            , (imprimir-char pila)
+            \$ (desapilar pila)
+            \. (imprimir-int pila)
+            \, (imprimir-char pila)
             ;Mover Puntero
-            > (mover-derecha puntero)
-            < (mover-izquierda puntero)
-            ^ (mover-arriba puntero)
-            v (mover-abajo puntero)
-            ? (mover-aleatorio puntero)
-            _   pila))
+            \> (mover-derecha puntero)
+            \< (mover-izquierda puntero)
+            \^ (mover-arriba puntero)
+            \v (mover-abajo puntero)
+            \? (mover-aleatorio puntero)
+            \_ (horizontal-if pila puntero)
+            \| (vertical-if pila puntero)
+            _   pila))                                      ;retorna la pila si no es una instruccion valida
 
 
 (defn imprimir-estado-puntero [puntero]
