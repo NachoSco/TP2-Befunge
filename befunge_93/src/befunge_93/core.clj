@@ -1,7 +1,9 @@
 (ns befunge-93.core
     (:require [clojure.string :as str]
       [clojure.java.io :as io]))
+
 ;--------------- Leer el archivo, Buscarlo en el equipo, crear la matriz y llenarla------------------------
+
 (defn leer-archivo [ruta]
       (try
         (let [contenido (slurp ruta)
@@ -37,187 +39,228 @@
              (or (buscar "/")
                  (println "Archivo no encontrado"))))
 
-;-------------------- Definicion de la Pila-------------------------------------------------
-(defn crear-pila []
-      [])
+;-------------------- Definicion del Estado -------------------------------------------------
 
-(defn apilar [list x]
-      (conj list x))
+(defn crear-estado []
+      {:pila []
+       :puntero {:posicion [0 0] :direccion :derecha}
+       :matriz (crear-matriz-vacia)})
 
-(defn desapilar [list]
-      (if (empty? list)
-        0  ; Si la pila está vacía, devuelve 0
-        (pop list)))  ; Si no está vacía, desapila un elemento
+(defn actualizar-matriz [estado nueva-matriz]
+      (assoc estado :matriz nueva-matriz))
 
-(defn obtener-ultimo [list]
-      (first list))
+(defn actualizar-pila [estado nueva-pila]
+      (assoc estado :pila nueva-pila))
 
-;------------- Puntero-----------------------------------------
+(defn actualizar-puntero [estado nuevo-puntero]
+      (assoc estado :puntero nuevo-puntero))
 
-(def puntero {:posicion [0 0] :direccion :derecha})
+;--------------------- Definicion de la Pila ------------------------
 
-(defn cambiar-direccion [puntero nueva-direccion]
-      (assoc puntero :direccion nueva-direccion))
+(defn apilar [estado valor]
+      ;Apila un valor en la pila del estado.
+      (update estado :pila conj valor))
 
-(defn mover-puntero [puntero]
-      (let [{:keys [posicion direccion]} puntero
+(defn desapilar [estado]
+      ;Desapila el último valor de la pila del estado. Si la pila está vacía, el estado no se modifica.
+      (update estado :pila (fn [pila] (if (empty? pila) pila (pop pila)))))
+
+(defn obtener-ultimo [estado]
+      ;Obtiene el último valor de la pila del estado, o 0 si la pila está vacía.
+      (let [pila (:pila estado)]
+           (if (empty? pila) 0 (peek pila))))
+
+;------------------- Definicion del Puntero --------------------------
+
+; Cambiar la dirección del puntero dentro del estado
+(defn cambiar-direccion [estado nueva-direccion]
+      (update estado :puntero #(assoc % :direccion nueva-direccion)))
+
+; Mover el puntero dentro del estado
+(defn mover-puntero [estado]
+      (let [{:keys [posicion direccion]} (:puntero estado)
             [fila columna] posicion]
-           (case direccion
-                 :derecha (assoc puntero :posicion [fila (mod (inc columna) 80)])
-                 :izquierda (assoc puntero :posicion [fila (mod (+ (dec columna) 80) 80)])
-                 :abajo (assoc puntero :posicion [(mod (inc fila) 25) columna])
-                 :arriba (assoc puntero :posicion [(mod (+ (dec fila) 25) 25) columna]))))
+           (update estado :puntero
+                   #(assoc %
+                           :posicion
+                           (case direccion
+                                 :derecha [fila (mod (inc columna) 80)]
+                                 :izquierda [fila (mod (+ (dec columna) 80) 80)]
+                                 :abajo [(mod (inc fila) 25) columna]
+                                 :arriba [(mod (+ (dec fila) 25) 25) columna])))))
 
-(defn leer-caracter-en-posicion [matriz puntero]
-      (let [{:keys [posicion]} puntero
-            [fila columna] posicion] ; extraemos fila y columna del puntero
-           (get-in matriz [fila columna])))
+; Leer el carácter en la posición actual del puntero en la matriz del estado
+(defn leer-caracter-en-posicion [estado]
+      (let [{:keys [posicion]} (:puntero estado)
+            [fila columna] posicion]
+           (get-in (:matriz estado) [fila columna])))
 
-;-----------------------Operaciones Aritmetícas---------------------------------------------
+;------------------- Operaciones Aritméticas -----------------------
+
 ; +
-(defn sumar [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (apilar pila (+ valor1 valor2))))
+(defn sumar [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar (+ valor1 valor2))))
+
 ; -
-(defn restar [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (apilar pila (- valor2 valor1))))  ; El orden cambia para restar: valor2 - valor1
+(defn restar [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar (- valor2 valor1))))  ; Orden: valor2 - valor1
 
 ; *
-(defn multiplicar [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (apilar pila (* valor1 valor2))))  ; Apilamos el producto de ambos valores
+(defn multiplicar [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar (* valor1 valor2))))  ; Apilamos el producto
 
 ; /
-(defn dividir [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (if (not= valor1 0)  ; Verificamos que no haya división por cero
-             (apilar pila (quot valor2 valor1))  ; Usamos quot para división entera
-             (apilar pila 0))))  ; Si hay división por cero, devolvemos 0
+(defn dividir [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar
+                   (if (not= valor1 0) (quot valor2 valor1) 0))))  ; Manejo de divisiÃ³n por cero
+
 ; %
-(defn modulo [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (apilar pila (mod valor2 valor1))))
+(defn modulo [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar (mod valor2 valor1))))
 
-(defn negar [pila]
-      (let [valor (obtener-ultimo pila)
-            nueva-pila (desapilar pila)]
-           (apilar nueva-pila (if (not= valor 0) 0 1))))
+; Negar
+(defn negar [estado]
+      (let [valor (obtener-ultimo (:pila estado))]
+           (update estado :pila #(apilar (desapilar %) (if (not= valor 0) 0 1)))))
 
-(defn mayor-que [pila]
-      (let [valor1 (desapilar pila)
-            valor2 (desapilar pila)]
-           (apilar pila (if (> valor2 valor1) 1 0))))  ;; Devuelve 1 si valor2 > valor1, sino 0
+; Mayor que
+(defn mayor-que [estado]
+      (let [valor1 (obtener-ultimo (:pila estado))
+            estado-sin-valor1 (update estado :pila desapilar)
+            valor2 (obtener-ultimo (:pila estado-sin-valor1))
+            estado-sin-valor2 (update estado-sin-valor1 :pila desapilar)]
+           (update estado-sin-valor2 :pila apilar (if (> valor2 valor1) 1 0))))  ;; Devuelve 1 si valor2 > valor1
 
-;----------------Instrucciones de movimiento-------------------------
+; ---------------- Operaciones de Movimiento -----------------------
 
 ; >
-(defn mover-derecha [puntero]
-      (cambiar-direccion puntero :derecha))
+(defn mover-derecha [estado]
+      (update estado :puntero cambiar-direccion :derecha))
+
 ; <
-(defn mover-izquierda [puntero]
-      (cambiar-direccion puntero :izquierda))
+(defn mover-izquierda [estado]
+      (update estado :puntero cambiar-direccion :izquierda))
+
 ; ^
-(defn mover-arriba [puntero]
-      (cambiar-direccion puntero :arriba))
+(defn mover-arriba [estado]
+      (update estado :puntero cambiar-direccion :arriba))
+
 ; v
-(defn mover-abajo [puntero]
-      (cambiar-direccion puntero :abajo))
+(defn mover-abajo [estado]
+      (update estado :puntero cambiar-direccion :abajo))
+
 ; ?
-(defn mover-aleatorio [puntero]
+(defn mover-aleatorio [estado]
+      ; efectos secundarios con rand-nth
       (let [direcciones [:derecha :izquierda :arriba :abajo]
-            direccion-aleatoria (rand-nth direcciones)]  ;; Selecciona una dirección aleatoria
-           (cambiar-direccion puntero direccion-aleatoria)))
+            direccion-aleatoria (rand-nth direcciones)]
+           (update estado :puntero cambiar-direccion direccion-aleatoria)))
 
-(defn horizontal-if [pila puntero]
-      (let [valor (desapilar pila)]
-           (if (zero? valor)
-             (cambiar-direccion puntero :derecha) ;; Si es 0, mueve a la derecha
-             (cambiar-direccion puntero :izquierda)))) ;; Si no, mueve a la izquierda
+; Horizontal If
+(defn horizontal-if [estado]
+      (let [valor (obtener-ultimo (:pila estado))
+            estado-sin-valor (update estado :pila desapilar)]
+           (update estado-sin-valor :puntero cambiar-direccion
+                   (if (zero? valor) :derecha :izquierda))))
 
-(defn vertical-if [pila puntero]
-      (let [valor (desapilar pila)]
-           (if (zero? valor)
-             (cambiar-direccion puntero :abajo) ;; Si es 0, mueve hacia abajo
-             (cambiar-direccion puntero :arriba)))) ;; Si no, mueve hacia arriba
+; Vertical If
+(defn vertical-if [estado]
+      (let [valor (obtener-ultimo (:pila estado))
+            estado-sin-valor (update estado :pila desapilar)]
+           (update estado-sin-valor :puntero cambiar-direccion
+                   (if (zero? valor) :abajo :arriba))))
 
-;-------------Instrucciones que operan sobre los valores de la pila--------------------
+; ------------------- Instrucciones que operan sobre el valor de la pila ---------------
 
-(defn duplicar [pila]
-      (let [valor (obtener-ultimo pila)]
-           (apilar (apilar pila valor) valor)))  ;; Duplica el valor y lo apila
+; Duplicar
+(defn duplicar [estado]
+      (let [pila (:pila estado)
+            valor (obtener-ultimo pila)]
+           (update estado :pila #(apilar (apilar % valor) valor)))) ;; Duplica el valor y lo apila
 
-
-(defn intercambiar [pila]
-      (let [valor1 (obtener-ultimo pila)
-            pila-sin-valor1 (desapilar pila)
+; Intercambiar
+(defn intercambiar [estado]
+      (let [pila (:pila estado)
+            valor1 (obtener-ultimo pila)
+            pila-sin-valor1 (:pila (desapilar estado)) ;; Desapila una vez
             valor2 (obtener-ultimo pila-sin-valor1)
-            nueva-pila (desapilar pila-sin-valor1)]
-           (apilar (apilar nueva-pila valor1) valor2)))  ;; Intercambia valor1 y valor2
+            pila-sin-valor2 (:pila (desapilar (assoc estado :pila pila-sin-valor1)))] ;; Desapila otra vez
+           (assoc estado :pila (apilar (apilar pila-sin-valor2 valor1) valor2)))) ;; Intercambia valor1 y valor2
+
+; Imprimir como Entero
+(defn imprimir-int [estado]
+      (let [pila (:pila estado)
+            valor (obtener-ultimo pila)]
+           (println valor) ;; Imprime el valor como entero
+           (desapilar estado))) ;; Retorna el estado con la pila desapilada
+
+; Imprimir como Carácter
+(defn imprimir-char [estado]
+      (let [pila (:pila estado)
+            valor (obtener-ultimo pila)]
+           (print (char valor)) ;; Imprime el valor como carácter ASCII
+           (desapilar estado))) ;; Retorna el estado con la pila desapilada
 
 
-(defn imprimir-int [pila]
-      (let [valor (obtener-ultimo pila)]
-           (println valor)  ;; Imprime el valor como un número entero
-           pila))  ;; Retorna la pila sin cambios
+; ------------------- Instrucciones que modifican el estado -----------------
 
-(defn imprimir-char [pila]
-      (let [valor (obtener-ultimo pila)]
-           (print (char valor))  ;; Imprime el valor como un carácter ASCII
-           pila))  ;; Retorna la pila sin cambios
-
-
-(defn ejecutar-operacion [operacion pila puntero]
+(defn ejecutar-operacion [operacion estado]
       (case operacion
-            ;Atirmetica
-            \+ (sumar pila)
-            \- (restar pila)
-            \* (multiplicar pila)
-            \/ (dividir pila)
-            \% (modulo pila)
-            \! (negar pila)
-            \` (mayor-que pila)
-            ;Ins de la Pila
-            \: (duplicar pila)
-            \ (intercambiar pila)
-            \$ (desapilar pila)
-            \. (imprimir-int pila)
-            \, (imprimir-char pila)
-            ;Mover Puntero
-            \> (mover-derecha puntero)
-            \< (mover-izquierda puntero)
-            \^ (mover-arriba puntero)
-            \v (mover-abajo puntero)
-            \? (mover-aleatorio puntero)
-            \_ (horizontal-if pila puntero)
-            \| (vertical-if pila puntero)
-            _   pila))                                      ;retorna la pila si no es una instruccion valida
+            ;; Aritmética
+            \+ (sumar estado)
+            \- (restar estado)
+            \* (multiplicar estado)
+            \/ (dividir estado)
+            \% (modulo estado)
+            \! (negar estado)
+            \` (mayor-que estado)
 
+            ;; Instrucciones de la pila
+            \: (duplicar estado)
+            \ (intercambiar estado)
+            \$ (desapilar estado)
+            \. (imprimir-int estado)
+            \, (imprimir-char estado)
 
-(defn imprimir-estado-puntero [puntero]
-      (println "Posición actual:" (:posicion puntero))
-      (println "Dirección actual:" (:direccion puntero) "\n"))
+            ;; Movimiento del puntero
+            \> (update estado :puntero mover-derecha)
+            \< (update estado :puntero mover-izquierda)
+            \^ (update estado :puntero mover-arriba)
+            \v (update estado :puntero mover-abajo)
+            \? (update estado :puntero mover-aleatorio)
+            \_ (horizontal-if estado)
+            \| (vertical-if estado)
+            estado))
 
+;------------------ Main con estado ----------------------
 
 (defn -main []
       (println "Contenido cargado:")
       (let [contenido (leer-archivo (buscar-archivo "ejemplo.txt"))  ;; Leer el archivo
-            matriz (crear-matriz-vacia)  ;; Crear la matriz vacía
-            matriz-llena (llenar-matriz matriz contenido)  ;; Llenar la matriz con el contenido del archivo
-            puntero {:posicion [0 0] :direccion :derecha}
-            puntero-2 (cambiar-direccion puntero :abajo)
-            puntero-3 (mover-puntero puntero-2)]  ;; Inicializar el puntero]
+            estado (crear-estado)  ;; Crear el estado inicial
+            estado-con-matriz (update estado :matriz llenar-matriz contenido)] ;; Llenar la matriz en el estado
 
            ;; Imprimir la matriz llena
            (println "Matriz llena:")
-           (doseq [fila matriz-llena]
-                  (prn fila))
-
-           ;; Leer el carácter en la posición [0 0] del puntero
-           (println "Primer carácter en la posición [1 0]:"
-                    (leer-caracter-en-posicion matriz-llena puntero-3))))
+           (doseq [fila (:matriz estado-con-matriz)]
+                  (prn fila))))
