@@ -48,15 +48,6 @@
    :stringmode false
    :activo true})
 
-(defn actualizar-matriz [estado nueva-matriz]
-  (assoc estado :matriz nueva-matriz))
-
-(defn actualizar-pila [estado nueva-pila]
-  (assoc estado :pila nueva-pila))
-
-(defn actualizar-puntero [estado nuevo-puntero]
-  (assoc estado :puntero nuevo-puntero))
-
 (defn toggle-stringmode [estado]
   (update estado :stringmode not))
 
@@ -80,10 +71,6 @@
 
 ;------------------- Definicion del Puntero --------------------------
 
-; Cambiar la dirección del puntero dentro del estado
-(defn cambiar-direccion [estado nueva-direccion]
-  (update estado :puntero #(assoc % :direccion nueva-direccion)))
-
 ; Mover el puntero dentro del estado
 (defn mover-puntero [estado]
   (let [{:keys [posicion direccion]} (:puntero estado)
@@ -97,12 +84,6 @@
                  :izquierda [fila (mod (+ (dec columna) 80) 80)]
                  :abajo [(mod (inc fila) 25) columna]
                  :arriba [(mod (+ (dec fila) 25) 25) columna])))))
-
-; Leer el carácter en la posición actual del puntero en la matriz del estado
-(defn leer-caracter-en-posicion [estado]
-  (let [{:keys [posicion]} (:puntero estado)
-        [fila columna] posicion]
-    (get-in (:matriz estado) [fila columna])))
 
 ;------------------- Operaciones Aritméticas -----------------------
 
@@ -176,7 +157,7 @@
   ; efectos secundarios con rand-nth
   (let [direcciones [:derecha :izquierda :arriba :abajo]
         direccion-aleatoria (rand-nth direcciones)]
-    (update estado :puntero cambiar-direccion direccion-aleatoria)))
+    (update estado :puntero assoc :direccion direccion-aleatoria)))
 
 ; Horizontal If
 (defn horizontal-if [estado]
@@ -220,7 +201,6 @@
   (let [pila (:pila estado)]
     (if (empty? pila)
       (do
-        (println "Error: la pila está vacía, no se puede imprimir un entero.")
         estado) ;; Devolvemos el estado sin cambios
       (let [valor (obtener-ultimo estado)]
         (println valor) ;; Imprime el valor como entero
@@ -231,7 +211,6 @@
   (let [pila (:pila estado)]
     (if (empty? pila)
       (do
-        (println "Error: la pila está vacía, no se puede imprimir un carácter.")
         estado) ;; Devolvemos el estado sin cambios
       (let [valor (obtener-ultimo estado)]
         (print (char valor)) ;; Imprime el valor como carácter ASCII
@@ -336,7 +315,8 @@
 (defn procesar-instruccion [estado instruccion]
   (cond
     (= instruccion \@) (assoc estado :activo false) ;; Finaliza el programa
-    (= instruccion \") (toggle-stringmode estado)   ;; Alterna modo cadena
+    (= instruccion \") (toggle-stringmode estado) ;; Alterna modo cadena
+    (= instruccion \#) (mover-puntero estado)
     (:stringmode estado) (apilar-valor-desde-char estado instruccion) ;; En modo cadena
     (Character/isDigit instruccion)                ;; Si es un número
     (let [numero (Character/digit instruccion 10)] ;; Convierte el caracter en número
@@ -357,6 +337,7 @@
         ;(Thread/sleep 500)                                  ;; Esperar 1 segundo
         ;; Procesar la instrucción y mover el puntero
         (recur (mover-puntero (procesar-instruccion estado-actual instruccion)))))))
+
 ;------------------ Pruebas de operaciones ------------------
 
 (defn prueba-operaciones-pila []
